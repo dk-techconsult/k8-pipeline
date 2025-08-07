@@ -11,12 +11,12 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                echo "Checking out code from https://github.com/PrinceShawtz/k8s-pipeline.git"
-                git url: 'https://github.com/PrinceShawtz/k8s-pipeline.git'
-            }
-        }
+        //stage('Checkout') {
+            //steps {
+                //echo "Checking out code from https://github.com/PrinceShawtz/k8s-pipeline.git"
+               // git url: 'https://github.com/PrinceShawtz/k8s-pipeline.git'
+           // }
+        //}
 
         stage('Build Docker Image') {
             steps {

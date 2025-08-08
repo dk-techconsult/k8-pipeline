@@ -3,7 +3,6 @@ pipeline {
 
     environment {
         DOCKER_REPO = 'princeshawtz/k8s-pipeline'
-        BUILD_ID = "${new Date().format('yyyyMMdd-HHmmss')}"
     }
 
     parameters {
@@ -11,18 +10,22 @@ pipeline {
     }
 
     stages {
-        //stage('Checkout') {
-            //steps {
-                //echo "Checking out code from https://github.com/PrinceShawtz/k8s-pipeline.git"
-               // git url: 'https://github.com/PrinceShawtz/k8s-pipeline.git'
-           // }
-        //}
+        // Optional: Checkout stage (uncomment if needed)
+        /*
+        stage('Checkout') {
+            steps {
+                echo "Checking out code from https://github.com/PrinceShawtz/k8s-pipeline.git"
+                git url: 'https://github.com/PrinceShawtz/k8s-pipeline.git'
+            }
+        }
+        */
 
         stage('Build Docker Image') {
             steps {
-                echo "Building Docker image: princeshawtz/k8s-pipeline:${env.BUILD_TAG}"
                 script {
-                    sh "docker build -t princeshawtz/k8s-pipeline:${env.BUILD_TAG} ."
+                    env.BUILD_ID = new Date().format('yyyyMMdd-HHmmss')
+                    echo "Building Docker image: ${DOCKER_REPO}:${env.BUILD_ID}"
+                    sh "docker build -t ${DOCKER_REPO}:${env.BUILD_ID} ."
                 }
             }
         }
@@ -30,10 +33,12 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 echo "Pushing Docker image to Docker Hub"
-                script {
-                    docker.withRegistry('', 'docker-hub') {
-                        docker.image("${DOCKER_REPO}:${BUILD_ID}").push()
-                    }
+                withCredentials([usernamePassword(credentialsId: 'docker-hub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                    sh """
+                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                        docker push ${DOCKER_REPO}:${env.BUILD_ID}
+                        docker logout
+                    """
                 }
             }
         }
@@ -42,7 +47,7 @@ pipeline {
             steps {
                 echo "Deploying to Kubernetes namespace: ${params.K8S_NAMESPACE}"
                 sh """
-                    sed 's|__IMAGE__|${DOCKER_REPO}:${BUILD_ID}|g; s|__NAMESPACE__|${params.K8S_NAMESPACE}|g' k8s/deployment.yaml | kubectl apply -f -
+                    sed 's|__IMAGE__|${DOCKER_REPO}:${env.BUILD_ID}|g; s|__NAMESPACE__|${params.K8S_NAMESPACE}|g' k8s/deployment.yaml | kubectl apply -f -
                 """
             }
         }
@@ -50,7 +55,7 @@ pipeline {
 
     post {
         success {
-            echo "Pipeline completed successfully with build ID: ${BUILD_ID}"
+            echo "Pipeline completed successfully with build ID: ${env.BUILD_ID}"
         }
         failure {
             echo "Pipeline failed."

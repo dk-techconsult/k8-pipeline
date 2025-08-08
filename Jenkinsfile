@@ -20,9 +20,9 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                echo "Building Docker image: ${DOCKER_REPO}:${BUILD_ID}"
+                echo "Building Docker image: princeshawtz/k8s-pipeline:${env.BUILD_TAG}"
                 script {
-                    docker.build("${DOCKER_REPO}:${BUILD_ID}")
+                    sh "docker build -t princeshawtz/k8s-pipeline:${env.BUILD_TAG} ."
                 }
             }
         }

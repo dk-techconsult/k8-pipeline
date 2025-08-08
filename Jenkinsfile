@@ -2,7 +2,7 @@ pipeline {
     agent any
     
     environment {
-        DOCKER_REPO = 'dk-techconsult/k8s-pipeline'
+        DOCKER_REPO = 'dktc419/kube'
     }
     
     parameters {

@@ -1,25 +1,15 @@
 pipeline {
     agent any
-
+    
     environment {
         DOCKER_REPO = 'princeshawtz/k8s-pipeline'
     }
-
+    
     parameters {
         string(name: 'K8S_NAMESPACE', defaultValue: 'default', description: 'Kubernetes namespace to deploy to')
     }
-
+    
     stages {
-        // Optional: Checkout stage (uncomment if needed)
-        /*
-        stage('Checkout') {
-            steps {
-                echo "Checking out code from https://github.com/PrinceShawtz/k8s-pipeline.git"
-                git url: 'https://github.com/PrinceShawtz/k8s-pipeline.git'
-            }
-        }
-        */
-
         stage('Build Docker Image') {
             steps {
                 script {
@@ -29,36 +19,44 @@ pipeline {
                 }
             }
         }
-
+        
         stage('Push Docker Image') {
             steps {
                 echo "Pushing Docker image to Docker Hub"
                 withCredentials([usernamePassword(credentialsId: 'docker-hub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sh """
+                    sh '''
                         echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                        docker push ${DOCKER_REPO}:${env.BUILD_ID}
+                        docker push ${DOCKER_REPO}:${BUILD_ID}
                         docker logout
-                    """
+                    '''
                 }
             }
         }
-
+        
         stage('Deploy to Kubernetes') {
             steps {
                 echo "Deploying to Kubernetes namespace: ${params.K8S_NAMESPACE}"
-                sh """
-                    sed 's|__IMAGE__|${DOCKER_REPO}:${env.BUILD_ID}|g; s|__NAMESPACE__|${params.K8S_NAMESPACE}|g' k8s/deployment.yaml | kubectl apply -f -
-                """
+                sh '''
+                    sed "s|__IMAGE__|${DOCKER_REPO}:${BUILD_ID}|g; s|__NAMESPACE__|${K8S_NAMESPACE}|g" k8s/deployment.yaml | kubectl apply -f -
+                '''
             }
         }
     }
-
+    
     post {
         success {
             echo "Pipeline completed successfully with build ID: ${env.BUILD_ID}"
+            // Clean up local Docker image to save space
+            sh "docker rmi ${DOCKER_REPO}:${env.BUILD_ID} || true"
         }
         failure {
             echo "Pipeline failed."
+            // Clean up local Docker image on failure too
+            sh "docker rmi ${DOCKER_REPO}:${env.BUILD_ID} || true"
+        }
+        always {
+            // Cleanup any dangling images
+            sh "docker system prune -f || true"
         }
     }
 }

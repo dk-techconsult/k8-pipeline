@@ -2,7 +2,7 @@ pipeline {
     agent any
     
     environment {
-        DOCKER_REPO = 'princeshawtz/k8s-pipeline'
+        DOCKER_REPO = 'dk-techconsult/k8s-pipeline'
     }
     
     parameters {
@@ -95,8 +95,8 @@ pipeline {
                                     echo ""
                                     echo "🚀 Application deployed successfully!"
                                     echo "📝 To access your app locally with Kind:"
-                                    echo "   kubectl port-forward service/k8s-pipeline-service 8080:80 -n ${K8S_NAMESPACE}"
-                                    echo "   Then visit: http://localhost:8080"
+                                    echo "   kubectl port-forward service/k8s-pipeline-service 8282:80 -n ${K8S_NAMESPACE}"
+                                    echo "   Then visit: http://localhost:8282"
                                     
                                 else
                                     echo "❌ Cannot connect to Kind cluster"
@@ -122,7 +122,7 @@ pipeline {
             echo "🔗 Docker Hub: https://hub.docker.com/r/${DOCKER_REPO}/tags"
             echo ""
             echo "💡 Next steps:"
-            echo "   • Test your app: kubectl port-forward service/k8s-pipeline-service 8080:80 -n ${params.K8S_NAMESPACE}"
+            echo "   • Test your app: kubectl port-forward service/k8s-pipeline-service 8282:80 -n ${params.K8S_NAMESPACE}"
             echo "   • View logs: kubectl logs -l app=k8s-pipeline-app -n ${params.K8S_NAMESPACE}"
             echo "   • Scale up: kubectl scale deployment k8s-pipeline-app --replicas=3 -n ${params.K8S_NAMESPACE}"
             

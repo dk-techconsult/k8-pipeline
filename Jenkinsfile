@@ -1,3 +1,14 @@
+def buildAndPushDockerImage(imageName, dockerfilePath, repositoryName, buildTag) {
+    def buildDir = dockerfilePath.substring(0, dockerfilePath.lastIndexOf('/'))
+    def fullTag = "${repositoryName}:${imageName}-${buildTag}"
+
+    dir(buildDir) {
+        sh "docker build -t ${fullTag} ."
+    }
+
+    sh "docker push ${fullTag}"
+}
+
 pipeline {
     agent any
     
@@ -7,6 +18,11 @@ pipeline {
     
     parameters {
         string(name: 'K8S_NAMESPACE', defaultValue: 'default', description: 'Kubernetes namespace to deploy to')
+        choice(
+            name: 'DOCKER_CREDENTIAL_ID',
+            choices: ['docker-hub', 'docker-credentials', 'docker-access-token'],
+            description: 'Select Docker credentials to use for login'
+        )
     }
     
     stages {
@@ -33,10 +49,10 @@ pipeline {
             steps {
                 script {
                     env.BUILD_ID = new Date().format('yyyyMMdd-HHmmss')
+                    env.buildTag = env.BUILD_ID  // Set buildTag for the function
+                    
                     echo "Building Docker image: ${DOCKER_REPO}:${env.BUILD_ID}"
                     sh "docker build -t ${DOCKER_REPO}:${env.BUILD_ID} ."
-                    
-                    // Tag as latest for local Kind deployment
                     sh "docker tag ${DOCKER_REPO}:${env.BUILD_ID} ${DOCKER_REPO}:latest"
                 }
             }
@@ -45,10 +61,11 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 echo "Pushing Docker image to Docker Hub"
-                withCredentials([usernamePassword(credentialsId: 'dockerhub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                withCredentials([usernamePassword(credentialsId: params.DOCKER_CREDENTIAL_ID, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh '''
                         echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
                         docker push ${DOCKER_REPO}:${BUILD_ID}
+                        docker push ${DOCKER_REPO}:latest
                         docker logout
                     '''
                 }
@@ -133,21 +150,21 @@ pipeline {
     post {
         success {
             echo "🎉 Pipeline completed successfully!"
-            echo "🐳 Docker image: ${DOCKER_REPO}:latest (loaded in Kind)"
+            echo "🐳 Docker image: ${DOCKER_REPO}:${env.BUILD_ID}"
             echo "☸️  Deployed to Kind cluster in namespace: ${params.K8S_NAMESPACE}"
+            echo "🔗 Docker Hub: https://hub.docker.com/r/dktc419/kube/tags"
             echo ""
             echo "💡 Next steps:"
             echo "   • Test your app: kubectl port-forward service/k8s-pipeline-service 8282:80 -n ${params.K8S_NAMESPACE}"
             echo "   • View logs: kubectl logs -l app=k8s-pipeline-app -n ${params.K8S_NAMESPACE}"
             echo "   • Scale up: kubectl scale deployment k8s-pipeline-app --replicas=3 -n ${params.K8S_NAMESPACE}"
-            echo ""
-            echo "🔧 To fix Docker Hub push:"
-            echo "   • Update Jenkins 'docker-hub' credentials"
-            echo "   • Use Docker Hub access token instead of password"
-            echo "   • Change 'return false' to 'return true' in Push Docker Image stage"
+            
+            // Clean up local Docker image to save space
+            sh "docker rmi ${DOCKER_REPO}:${env.BUILD_ID} || true"
         }
         failure {
             echo "❌ Pipeline failed."
+            sh "docker rmi ${DOCKER_REPO}:${env.BUILD_ID} || true"
         }
         always {
             sh "docker system prune -f || true"

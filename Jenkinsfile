@@ -43,10 +43,6 @@ pipeline {
         }
         
         stage('Push Docker Image') {
-            when {
-                // Only push if credentials are working
-                expression { return false } // Temporarily disabled - change to true when credentials fixed
-            }
             steps {
                 echo "Pushing Docker image to Docker Hub"
                 withCredentials([usernamePassword(credentialsId: 'docker-hub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {

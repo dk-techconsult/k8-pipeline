@@ -37,7 +37,7 @@ pipeline {
             steps {
                 echo "Deploying to Kubernetes namespace: ${params.K8S_NAMESPACE}"
                 sh '''
-                    sed "s|__IMAGE__|${DOCKER_REPO}:${BUILD_ID}|g; s|__NAMESPACE__|${K8S_NAMESPACE}|g" k8s/deployment.yaml | kubectl apply -f -
+                    sed "s|__IMAGE__|${DOCKER_REPO}:${BUILD_ID}|g; s|__NAMESPACE__|${K8S_NAMESPACE}|g" deployment.yaml | kubectl apply -f -
                 '''
             }
         }

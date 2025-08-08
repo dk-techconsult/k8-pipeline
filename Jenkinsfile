@@ -64,7 +64,7 @@ pipeline {
                             export PATH="/tmp:$PATH"
                             
                             # Apply the deployment
-                            sed "s|__IMAGE__|${DOCKER_REPO}:${BUILD_ID}|g; s|__NAMESPACE__|${K8S_NAMESPACE}|g" k8s/deployment.yaml | kubectl apply -f -
+                            sed "s|__IMAGE__|${DOCKER_REPO}:${BUILD_ID}|g; s|__NAMESPACE__|${K8S_NAMESPACE}|g" deployment.yaml | kubectl apply -f -
                             
                             # Check deployment status
                             kubectl rollout status deployment/k8s-pipeline-app -n ${K8S_NAMESPACE}

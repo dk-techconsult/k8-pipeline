@@ -35,11 +35,18 @@ pipeline {
                     env.BUILD_ID = new Date().format('yyyyMMdd-HHmmss')
                     echo "Building Docker image: ${DOCKER_REPO}:${env.BUILD_ID}"
                     sh "docker build -t ${DOCKER_REPO}:${env.BUILD_ID} ."
+                    
+                    // Tag as latest for local Kind deployment
+                    sh "docker tag ${DOCKER_REPO}:${env.BUILD_ID} ${DOCKER_REPO}:latest"
                 }
             }
         }
         
         stage('Push Docker Image') {
+            when {
+                // Only push if credentials are working
+                expression { return false } // Temporarily disabled - change to true when credentials fixed
+            }
             steps {
                 echo "Pushing Docker image to Docker Hub"
                 withCredentials([usernamePassword(credentialsId: 'docker-hub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
@@ -49,6 +56,19 @@ pipeline {
                         docker logout
                     '''
                 }
+            }
+        }
+        
+        stage('Load Image to Kind') {
+            steps {
+                echo "Loading Docker image into Kind cluster"
+                sh '''
+                    # Load the image into Kind cluster
+                    kind load docker-image ${DOCKER_REPO}:latest --name kind
+                    
+                    # Verify image is loaded
+                    docker exec kind-control-plane crictl images | grep ${DOCKER_REPO} || echo "Image may not be visible via crictl"
+                '''
             }
         }
         
@@ -75,9 +95,9 @@ pipeline {
                                     # Create namespace if it doesn't exist
                                     kubectl create namespace ${K8S_NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
                                     
-                                    # Apply the deployment
+                                    # Apply the deployment (use latest tag for Kind)
                                     echo "Applying deployment to Kind cluster..."
-                                    sed "s|__IMAGE__|${DOCKER_REPO}:${BUILD_ID}|g; s|__NAMESPACE__|${K8S_NAMESPACE}|g" deployment.yaml | kubectl apply -f -
+                                    sed "s|__IMAGE__|${DOCKER_REPO}:latest|g; s|__NAMESPACE__|${K8S_NAMESPACE}|g" deployment.yaml | kubectl apply -f -
                                     
                                     # Wait for deployment to be ready
                                     echo "Waiting for deployment to be ready..."
@@ -101,7 +121,7 @@ pipeline {
                                 else
                                     echo "❌ Cannot connect to Kind cluster"
                                     echo "🔧 Make sure Kind cluster is running: kind get clusters"
-                                    echo "📦 Docker image was still built and pushed: ${DOCKER_REPO}:${BUILD_ID}"
+                                    echo "📦 Docker image was still built: ${DOCKER_REPO}:latest"
                                     currentBuild.result = 'UNSTABLE'
                                 fi
                             '''
@@ -117,21 +137,21 @@ pipeline {
     post {
         success {
             echo "🎉 Pipeline completed successfully!"
-            echo "🐳 Docker image: ${DOCKER_REPO}:${env.BUILD_ID}"
+            echo "🐳 Docker image: ${DOCKER_REPO}:latest (loaded in Kind)"
             echo "☸️  Deployed to Kind cluster in namespace: ${params.K8S_NAMESPACE}"
-            echo "🔗 Docker Hub: https://hub.docker.com/r/${DOCKER_REPO}/tags"
             echo ""
             echo "💡 Next steps:"
             echo "   • Test your app: kubectl port-forward service/k8s-pipeline-service 8282:80 -n ${params.K8S_NAMESPACE}"
             echo "   • View logs: kubectl logs -l app=k8s-pipeline-app -n ${params.K8S_NAMESPACE}"
             echo "   • Scale up: kubectl scale deployment k8s-pipeline-app --replicas=3 -n ${params.K8S_NAMESPACE}"
-            
-            // Clean up local Docker image to save space
-            sh "docker rmi ${DOCKER_REPO}:${env.BUILD_ID} || true"
+            echo ""
+            echo "🔧 To fix Docker Hub push:"
+            echo "   • Update Jenkins 'docker-hub' credentials"
+            echo "   • Use Docker Hub access token instead of password"
+            echo "   • Change 'return false' to 'return true' in Push Docker Image stage"
         }
         failure {
             echo "❌ Pipeline failed."
-            sh "docker rmi ${DOCKER_REPO}:${env.BUILD_ID} || true"
         }
         always {
             sh "docker system prune -f || true"
